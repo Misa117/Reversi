@@ -9,6 +9,7 @@ frame_texture = pygame.image.load(os.path.join(ASSETS_DIR, 'frame_texture.jpg'))
 black_disc_image = pygame.image.load(os.path.join(ASSETS_DIR, 'black_disc.png'))
 white_disc_image = pygame.image.load(os.path.join(ASSETS_DIR, 'white_disc.png'))
 
+
 # 盤面の描画
 def draw_board(screen, CELL_SIZE, margin=40):
     # 外枠の描画
