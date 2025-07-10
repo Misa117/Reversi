@@ -3,25 +3,29 @@ import os
 
 pygame.mixer.init()
 
-# 効果音ファイルパス（拡張子は正確に）
-BLACK_SOUND_PATH = "assets/sounds/place_black.wav"
-WHITE_SOUND_PATH = "assets/sounds/place_white.wav"
-BGM_PATH = "assets/sounds/bgm.mp3"
+# 効果音読み込み用の共通関数
+def load_sound(path):
+    try:
+        return pygame.mixer.Sound(path)
+    except FileNotFoundError:
+        print(f"⚠️ 効果音が見つかりません: {path}")
+        return None
 
-# 効果音の読み込み
-try:
-    place_black = pygame.mixer.Sound(BLACK_SOUND_PATH)
-except FileNotFoundError:
-    print(f"⚠️ 効果音が見つかりません: {BLACK_SOUND_PATH}")
-    place_black = None
+# 各種効果音の読み込み
+place_black = load_sound("assets/sounds/place_black.wav")
+place_white = load_sound("assets/sounds/place_white.wav")
+flip_sound   = load_sound("assets/sounds/flip.wav")
 
-try:
-    place_white = pygame.mixer.Sound(WHITE_SOUND_PATH)
-except FileNotFoundError:
-    print(f"⚠️ 効果音が見つかりません: {WHITE_SOUND_PATH}")
-    place_white = None
+# BGM再生関数
+def play_bgm():
+    bgm_path = "assets/sounds/bgm.mp3"
+    if os.path.isfile(bgm_path):
+        pygame.mixer.music.load(bgm_path)
+        pygame.mixer.music.play(-1)
+    else:
+        print(f"⚠️ BGMファイルが見つかりません: {bgm_path}")
 
-# 効果音再生用関数を定義する
+# 効果音再生関数
 def play_black_sound():
     if place_black:
         place_black.play()
@@ -30,10 +34,6 @@ def play_white_sound():
     if place_white:
         place_white.play()
 
-# BGM再生関数
-def play_bgm():
-    if os.path.isfile(BGM_PATH):
-        pygame.mixer.music.load(BGM_PATH)
-        pygame.mixer.music.play(-1)
-    else:
-        print(f"⚠️ BGMファイルが見つかりません: {BGM_PATH}")
+def play_flip_sound():
+    if flip_sound:
+        flip_sound.play()

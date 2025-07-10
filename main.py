@@ -2,7 +2,7 @@ import pygame
 import sys
 import json
 import os
-from game import board, ROWS, COLS, init_board, place_disc, get_legal_moves
+from game import board, ROWS, COLS, init_board, place_disc, get_legal_moves, get_flippable_discs
 from graphics import draw_board, draw_discs, show_message, show_winner
 from player import choose_ai_move
 import sound  # サウンドモジュール
@@ -44,6 +44,15 @@ def main():
     global current_player
     clock = pygame.time.Clock()
 
+    # 裏返しアニメーション用変数
+    flipping = False              # 裏返し中かどうか
+    flip_positions = []           # 裏返す駒の位置リスト
+    flip_index = 0                # 今どの駒を裏返すかのインデックス
+    last_flip_time = 0            # 最後に裏返した時間（ミリ秒）
+    flip_delay = 500  # 500ミリ秒（0.5秒）          # 裏返し間隔（ミリ秒）
+
+    move_made = False             # 今ターンで置いたかどうかのフラグ
+
     while True:
         legal_moves = get_legal_moves(current_player)
 
@@ -52,7 +61,8 @@ def main():
         else:
             show_message(screen, "computer", WIDTH, HEIGHT)
 
-        if not legal_moves:
+        if not legal_moves and not flipping:
+            # パス処理（合法手なしかつアニメ中でない）
             current_player = WHITE if current_player == BLACK else BLACK
             if not get_legal_moves(current_player):
                 show_winner(screen, board, WIDTH, HEIGHT, CELL_SIZE)
@@ -62,43 +72,73 @@ def main():
             show_message(screen, "pass!", WIDTH, HEIGHT)
             continue
 
-        move_made = False
-        while not move_made:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
 
-                if event.type == pygame.MOUSEBUTTONDOWN and current_player == BLACK:
-                    x, y = pygame.mouse.get_pos()
-                    col = (x - MARGIN) // CELL_SIZE
-                    row = (y - MARGIN) // CELL_SIZE
-                    if 0 <= row < ROWS and 0 <= col < COLS:
-                        if (row, col) in legal_moves:
-                            place_disc(row, col, BLACK)
-                            sound.play_black_sound()
-                            current_player = WHITE
-                            move_made = True
+            # プレイヤーの操作は裏返し中でなければ受け付ける
+            if event.type == pygame.MOUSEBUTTONDOWN and current_player == BLACK and not flipping:
+                x, y = pygame.mouse.get_pos()
+                col = (x - MARGIN) // CELL_SIZE
+                row = (y - MARGIN) // CELL_SIZE
+                if 0 <= row < ROWS and 0 <= col < COLS:
+                    flippable = get_flippable_discs(row, col, BLACK)
+                    if flippable:
+                        # 駒を置く
+                        board[row][col] = BLACK
+                        sound.play_black_sound()  # 黒駒の効果音
+                        flip_positions = flippable
+                        flip_index = 0
+                        flipping = True
+                        last_flip_time = pygame.time.get_ticks()
+                        move_made = True
 
-            if current_player == WHITE and not move_made:
-                pygame.time.wait(500)
-                move = choose_ai_move(WHITE)
-                if move:
-                    place_disc(move[0], move[1], WHITE)
-                    sound.play_white_sound()
-                current_player = BLACK
+        # AIの操作（裏返し中は操作しない）
+        if current_player == WHITE and not move_made and not flipping:
+            pygame.time.wait(500)
+            move = choose_ai_move(WHITE)
+            if move:
+                row, col = move
+                flippable = get_flippable_discs(row, col, WHITE)
+                if flippable:
+                    board[row][col] = WHITE
+                    sound.play_white_sound()  # 白駒の効果音
+                    flip_positions = flippable
+                    flip_index = 0
+                    flipping = True
+                    last_flip_time = pygame.time.get_ticks()
                 move_made = True
 
-            draw_board(screen, CELL_SIZE, MARGIN)
-            draw_discs(screen, board, CELL_SIZE, MARGIN)
+        # 裏返しアニメーションの処理
+        if flipping:
+            now = pygame.time.get_ticks()
+            if flip_index < len(flip_positions) and now - last_flip_time >= flip_delay:
+                r, c = flip_positions[flip_index]
+                board[r][c] = current_player  # 裏返す
+                if sound.flip_sound:
+                    sound.play_flip_sound()
+                else:
+                    print("⚠️ flip_sound がロードされていません")
+                flip_index += 1
+                last_flip_time = now
 
-            black_count = sum(row.count(BLACK) for row in board)
-            white_count = sum(row.count(WHITE) for row in board)
-            save_turn_score(black_count, white_count)
-            show_turn_score(screen, black_count, white_count, WIDTH, HEIGHT)
+            if flip_index >= len(flip_positions):
+                flipping = False
+                move_made = False
+                current_player = WHITE if current_player == BLACK else BLACK
 
-            pygame.display.flip()
-            clock.tick(60)
+        # 画面描画（常に行うべき！）
+        draw_board(screen, CELL_SIZE, MARGIN)
+        draw_discs(screen, board, CELL_SIZE, MARGIN)
+
+        black_count = sum(row.count(BLACK) for row in board)
+        white_count = sum(row.count(WHITE) for row in board)
+        save_turn_score(black_count, white_count)
+        show_turn_score(screen, black_count, white_count, WIDTH, HEIGHT)
+
+        pygame.display.flip()
+        clock.tick(60)
 
 if __name__ == "__main__":
     main()
