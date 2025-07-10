@@ -2,7 +2,8 @@ import pygame
 import sys
 import json
 import os
-from game import board, ROWS, COLS, init_board, place_disc, get_legal_moves, get_flippable_discs
+import datetime
+from game import board, ROWS, COLS, init_board, get_legal_moves, get_flippable_discs
 from graphics import draw_board, draw_discs, show_message, show_winner
 from player import choose_ai_move
 import sound  # サウンドモジュール
@@ -24,27 +25,81 @@ def show_turn_score(screen, black, white, WIDTH, HEIGHT):
     score_surf = font.render(text, True, (255, 255, 255))
     screen.blit(score_surf, (WIDTH - 200, HEIGHT - 30))
 
-# ウィンドウのサイズなど設定
+def save_score_with_date(black_count, white_count, filename="score_history.json"):
+    data = {
+        "black": black_count,
+        "white": white_count,
+        "date": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    }
+    if os.path.exists(filename):
+        with open(filename, 'r') as f:
+            history = json.load(f)
+    else:
+        history = []
+    history.append(data)
+    with open(filename, 'w') as f:
+        json.dump(history, f, indent=2)
+
+def show_result_and_wait(screen, black_count, white_count, WIDTH, HEIGHT):
+    save_score_with_date(black_count, white_count)
+
+    font = pygame.font.SysFont(None, 36)
+    small_font = pygame.font.SysFont(None, 28)
+
+    clock = pygame.time.Clock()
+    selected = "retry"
+
+    while True:
+        screen.fill((0, 100, 0))
+
+        text = f"Black: {black_count}  White: {white_count}"
+        date = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        score_surface = font.render(text, True, (255, 255, 255))
+        date_surface = small_font.render(f"Date: {date}", True, (200, 200, 200))
+        screen.blit(score_surface, (WIDTH // 2 - score_surface.get_width() // 2, HEIGHT // 3))
+        screen.blit(date_surface, (WIDTH // 2 - date_surface.get_width() // 2, HEIGHT // 3 + 40))
+
+        retry_color = (255, 255, 0) if selected == "retry" else (180, 180, 180)
+        exit_color = (255, 255, 0) if selected == "exit" else (180, 180, 180)
+        retry_text = font.render("← Retry", True, retry_color)
+        exit_text = font.render("Exit →", True, exit_color)
+        screen.blit(retry_text, (WIDTH // 4 - retry_text.get_width() // 2, HEIGHT // 2))
+        screen.blit(exit_text, (WIDTH * 3 // 4 - exit_text.get_width() // 2, HEIGHT // 2))
+
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_LEFT:
+                    selected = "retry"
+                elif event.key == pygame.K_RIGHT:
+                    selected = "exit"
+                elif event.key == pygame.K_SPACE:
+                    return selected
+
+        clock.tick(30)
+
+# ウィンドウの設定
 WIDTH, HEIGHT = 640, 640
 MARGIN = 40
 BOARD_SIZE = WIDTH - 2 * MARGIN
 CELL_SIZE = BOARD_SIZE // COLS
 
-# 色定義
 BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("オセロ")
 
-current_player = BLACK
-init_board()
-
 def main():
-    global current_player
+    global board
+    init_board()
+    current_player = BLACK
     clock = pygame.time.Clock()
 
-    # 裏返しアニメーション用変数
     flipping = False
     flip_positions = []
     flip_index = 0
@@ -53,25 +108,37 @@ def main():
 
     move_made = False
 
-    # メッセージ表示用
     message = "player"
     message_start_time = pygame.time.get_ticks()
-    message_duration = 1000  # 1秒間表示
+    message_duration = 1000
 
     while True:
         legal_moves = get_legal_moves(current_player)
 
         if not legal_moves and not flipping:
-            # パス処理
             current_player = WHITE if current_player == BLACK else BLACK
             message = "player" if current_player == BLACK else "computer"
             message_start_time = pygame.time.get_ticks()
 
             if not get_legal_moves(current_player):
                 show_winner(screen, board, WIDTH, HEIGHT, CELL_SIZE)
-                pygame.time.wait(3000)
-                pygame.quit()
-                sys.exit()
+
+                black_count = sum(row.count(BLACK) for row in board)
+                white_count = sum(row.count(WHITE) for row in board)
+
+                choice = show_result_and_wait(screen, black_count, white_count, WIDTH, HEIGHT)
+                if choice == "retry":
+                    init_board()
+                    current_player = BLACK
+                    message = "player"
+                    message_start_time = pygame.time.get_ticks()
+                    flipping = False
+                    move_made = False
+                    continue
+                else:
+                    pygame.quit()
+                    sys.exit()
+
             show_message(screen, "pass!", WIDTH, HEIGHT)
             continue
 
@@ -115,10 +182,7 @@ def main():
             if flip_index < len(flip_positions) and now - last_flip_time >= flip_delay:
                 r, c = flip_positions[flip_index]
                 board[r][c] = current_player
-                if sound.flip_sound:
-                    sound.play_flip_sound()
-                else:
-                    print("⚠️ flip_sound がロードされていません")
+                sound.play_flip_sound()
                 flip_index += 1
                 last_flip_time = now
 
@@ -133,7 +197,6 @@ def main():
         draw_board(screen, CELL_SIZE, MARGIN)
         draw_discs(screen, board, CELL_SIZE, MARGIN)
 
-        # 一時メッセージ表示（1秒以内のみ）
         if message:
             now = pygame.time.get_ticks()
             if now - message_start_time < message_duration:
@@ -141,7 +204,6 @@ def main():
             else:
                 message = None
 
-        # スコア表示
         black_count = sum(row.count(BLACK) for row in board)
         white_count = sum(row.count(WHITE) for row in board)
         save_turn_score(black_count, white_count)
