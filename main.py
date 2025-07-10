@@ -45,25 +45,28 @@ def main():
     clock = pygame.time.Clock()
 
     # 裏返しアニメーション用変数
-    flipping = False              # 裏返し中かどうか
-    flip_positions = []           # 裏返す駒の位置リスト
-    flip_index = 0                # 今どの駒を裏返すかのインデックス
-    last_flip_time = 0            # 最後に裏返した時間（ミリ秒）
-    flip_delay = 500  # 500ミリ秒（0.5秒）          # 裏返し間隔（ミリ秒）
+    flipping = False
+    flip_positions = []
+    flip_index = 0
+    last_flip_time = 0
+    flip_delay = 50
 
-    move_made = False             # 今ターンで置いたかどうかのフラグ
+    move_made = False
+
+    # メッセージ表示用
+    message = "player"
+    message_start_time = pygame.time.get_ticks()
+    message_duration = 1000  # 1秒間表示
 
     while True:
         legal_moves = get_legal_moves(current_player)
 
-        if current_player == BLACK:
-            show_message(screen, "player", WIDTH, HEIGHT)
-        else:
-            show_message(screen, "computer", WIDTH, HEIGHT)
-
         if not legal_moves and not flipping:
-            # パス処理（合法手なしかつアニメ中でない）
+            # パス処理
             current_player = WHITE if current_player == BLACK else BLACK
+            message = "player" if current_player == BLACK else "computer"
+            message_start_time = pygame.time.get_ticks()
+
             if not get_legal_moves(current_player):
                 show_winner(screen, board, WIDTH, HEIGHT, CELL_SIZE)
                 pygame.time.wait(3000)
@@ -77,7 +80,6 @@ def main():
                 pygame.quit()
                 sys.exit()
 
-            # プレイヤーの操作は裏返し中でなければ受け付ける
             if event.type == pygame.MOUSEBUTTONDOWN and current_player == BLACK and not flipping:
                 x, y = pygame.mouse.get_pos()
                 col = (x - MARGIN) // CELL_SIZE
@@ -85,16 +87,14 @@ def main():
                 if 0 <= row < ROWS and 0 <= col < COLS:
                     flippable = get_flippable_discs(row, col, BLACK)
                     if flippable:
-                        # 駒を置く
                         board[row][col] = BLACK
-                        sound.play_black_sound()  # 黒駒の効果音
+                        sound.play_black_sound()
                         flip_positions = flippable
                         flip_index = 0
                         flipping = True
                         last_flip_time = pygame.time.get_ticks()
                         move_made = True
 
-        # AIの操作（裏返し中は操作しない）
         if current_player == WHITE and not move_made and not flipping:
             pygame.time.wait(500)
             move = choose_ai_move(WHITE)
@@ -103,19 +103,18 @@ def main():
                 flippable = get_flippable_discs(row, col, WHITE)
                 if flippable:
                     board[row][col] = WHITE
-                    sound.play_white_sound()  # 白駒の効果音
+                    sound.play_white_sound()
                     flip_positions = flippable
                     flip_index = 0
                     flipping = True
                     last_flip_time = pygame.time.get_ticks()
                 move_made = True
 
-        # 裏返しアニメーションの処理
         if flipping:
             now = pygame.time.get_ticks()
             if flip_index < len(flip_positions) and now - last_flip_time >= flip_delay:
                 r, c = flip_positions[flip_index]
-                board[r][c] = current_player  # 裏返す
+                board[r][c] = current_player
                 if sound.flip_sound:
                     sound.play_flip_sound()
                 else:
@@ -127,11 +126,22 @@ def main():
                 flipping = False
                 move_made = False
                 current_player = WHITE if current_player == BLACK else BLACK
+                message = "player" if current_player == BLACK else "computer"
+                message_start_time = pygame.time.get_ticks()
 
-        # 画面描画（常に行うべき！）
+        # 描画
         draw_board(screen, CELL_SIZE, MARGIN)
         draw_discs(screen, board, CELL_SIZE, MARGIN)
 
+        # 一時メッセージ表示（1秒以内のみ）
+        if message:
+            now = pygame.time.get_ticks()
+            if now - message_start_time < message_duration:
+                show_message(screen, message, WIDTH, HEIGHT)
+            else:
+                message = None
+
+        # スコア表示
         black_count = sum(row.count(BLACK) for row in board)
         white_count = sum(row.count(WHITE) for row in board)
         save_turn_score(black_count, white_count)
